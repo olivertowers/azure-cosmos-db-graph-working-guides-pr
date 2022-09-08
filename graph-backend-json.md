@@ -16,6 +16,7 @@ Vertices are stored as JSON documents that use the following format:
 {
   "label": "person",
   "id": "ben",
+  "partitionKey": "myPartitionKey"
   "firstName": [
     {
       "_value": "Ben",
@@ -66,9 +67,10 @@ Edges are stored as JSON documents that use the following format:
   "relationship": "friends",
   "_sink": "target_id",
   "_sinkLabel": "target_label",
-  "_vertexId": "source_id", 
+  "_sinkPartition": "target_partition_key"
+  "_vertexId": "source_id",
   "_vertexLabel": "source_label",
-  "partitionKey": "value",
+  "partitionKey": "myPartitionKey",
   "_isEdge": true, 
   "_rid": "zGolAOsmbgAHAAAAAAAAAA==",
   "_self": "dbs/zGolAA==/colls/zGolAOsmbgA=/docs/zGolAOsmbgAHAAAAAAAAAA==/",
@@ -88,8 +90,16 @@ Edges are stored as JSON documents that use the following format:
     * `_vertexLabel`: key-value pair that stores the label of the **source** Vertex.
 * For partitioned collections, the Edge object will store the following partition information:
     * `_sinkPartition`: key-value pair that stores the partitioning key value of the **target** Vertex. This will be used by the database engine to locate the exact partition of the target Vertex.
-    * `partitionKey`: key-value pair that stores the partitioning key of the **Edge itself**. This property name and value will be inherited from the **source Vertex** object. 
+    * `partitionKey`: key-value pair that stores the partitioning key of the **Edge itself** AND the **source** vertex. This  value will be inherited from the **source** vertex at create time when using `addE()` step which adheres to the rule that out-edges must be co-located in the same partition as the source vertex.
     * For more information, please visit the [Graph Partitioning topic](https://docs.microsoft.com/en-us/azure/cosmos-db/graph-partitioning).
+  * Adding edge into the graph when the source and/or target vertices do not exist is supported.
+    * Adding edges without vertices is supported using SQL SDK or Gremlin bulk executor
+    * It is NOT supported using Gremlin traversal step `addE()`, where both vertices must exist, or they must be inserted in the same traversal.
+    * This scenario is useful in cases where vertex/edge ingestion is out of order or executed in parallel for improved throughput.
+    * Gremlin traversals will continue to function if these incomplete edges exist in the graph with the following behavior:
+      *  If neither vertex exists (an orphaned edge) in the graph, then the edge will be ignored/hidden from traversals.
+      *  If one vertex exists (a dangling edge), then the edge will be returned if traversing from the existent vertex to the edge (`inE`, `outE`, `bothE`). If traversing from the edge to the non-existent vertex, then no result is returned.
+    *  All source and target vertex metadata described above must be populated correctly on the edge document for it to be considered valid and be readable from Gremlin traversals.
 * The following are system properties – automatically added by Cosmos DB. They shouldn’t be modified manually: `_rid`, `_self`, `_etag`, `_attachments` and `_ts`. 
 
 ## Caveats
